@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "QOCOufZgokQ=",
+  "success": true,
+  "projectFilePath": "/Users/nathan/dev/lopex/lopexc/lopexc.csproj",
+  "expectedPackageFiles": [
+    "/Users/nathan/.nuget/packages/mono.cecil/0.11.6/mono.cecil.0.11.6.nupkg.sha512"
+  ],
+  "logs": []
+}

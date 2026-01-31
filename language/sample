@@ -1,0 +1,44 @@
+struct User {
+    id: i32
+    name: string
+}
+
+fn find_username(users: User[], id: i32): Option<string>
+{
+    for user in users
+    {
+        if user.id == id => Some(user.name)
+    }
+
+    None
+}
+
+fn get_username_length(users: User[], id: i32) -> i32
+{
+    const name = find_username(users, id);
+    
+    match name {
+        Some(s) => s.length,
+        None => 0
+    }
+}
+
+const users: User[] = [
+    { id: 1, name: "Alice" },
+    { id: 2, name: "Bob" }
+]
+
+println(get_username_length(users, 2));
+
+var greeting: string = "Hello";
+
+var greeting2: string = greeting.map(c: rune => {
+    match c {
+        'e' => 'a',
+        'l' => 'r',
+        _ => c,
+    }
+});
+
+var x: i32 = (y > z) ? 5;
+

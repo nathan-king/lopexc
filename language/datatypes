@@ -1,0 +1,72 @@
+lopex -> CIL
+
+// functions
+
+fn function_name(argument: i32) -> i32 {
+    => "result"
+}
+
+// numbers
+i8 -> sbyte
+i16 -> short
+i32 -> int
+i64 -> long
+
+u8 -> byte
+u16 -> ushort
+u32 -> uint
+u64 -> ulong
+
+f32 -> float
+f64 -> double
+dec -> decimal
+
+// string
+string -> string // immutable
+span<char> -> ReadOnlySpan<char> // immutable
+mut span<char> -> Span<char>
+char -> char
+rune -> rune / char32
+u8[] -> byte[] / uint8[]
+
+// boolean and unit type
+bool -> bool
+() -> void
+never -> void
+
+// tuples
+(T1, T2, ...) -> ValueTuple<T1, T2, ...>
+
+// structs
+struct Point
+{
+    x: f32
+    y: f32
+}
+-> valuetype
+
+// enums
+
+enum Color {
+    Red
+    Green
+    Blue
+}
+-> enum (backed by i32 by default)
+
+// arrays & slices
+
+T[] -> T[]
+span<T> -> ReadOnlySpan<T>
+mut span<T> -> Span<T>
+
+// sum types
+
+Option<T> -> struct (tagged union)
+Result<T, E> -> struct (tagged union)
+
+// lists
+
+List<T> = List<T>
+
+

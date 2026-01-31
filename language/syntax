@@ -1,0 +1,27 @@
+// match expressions
+
+match x {
+    1 => "one"
+    2 => "two"
+};
+
+match x {
+    x > 1 => "larger than one"
+    x < 50 => "less than fifty"
+    _ =>  "unknown"
+};
+
+match color {
+    Red => "red"
+    Green => "green"
+    Blue => "blue"
+}
+
+var x = match {
+    Some(v) => v
+    None => 0
+}
+
+// destructuring
+
+var (x, y) = point;
