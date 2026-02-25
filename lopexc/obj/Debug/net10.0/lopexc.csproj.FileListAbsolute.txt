@@ -18,3 +18,4 @@
 /Users/nathan/dev/lopex/lopexc/obj/Debug/net10.0/lopexc.pdb
 /Users/nathan/dev/lopex/lopexc/obj/Debug/net10.0/lopexc.genruntimeconfig.cache
 /Users/nathan/dev/lopex/lopexc/obj/Debug/net10.0/ref/lopexc.dll
+/Users/nathan/dev/lopex/lopexc/obj/Debug/net10.0/lopexc.sourcelink.json

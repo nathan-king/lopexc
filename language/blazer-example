@@ -1,0 +1,11 @@
+<h1>Counter</h1>
+
+<p>Count: @count</p>
+
+<button @onclick="increment">Increment</button>
+
+@code 
+{
+    var count: u32 = 0;
+    fn increment() => count++;
+}

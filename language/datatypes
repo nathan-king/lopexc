@@ -3,7 +3,7 @@ lopex -> CIL
 // functions
 
 fn function_name(argument: i32) -> i32 {
-    => "result"
+    => 0
 }
 
 // numbers
@@ -23,11 +23,11 @@ dec -> decimal
 
 // string
 string -> string // immutable
-span<char> -> ReadOnlySpan<char> // immutable
-mut span<char> -> Span<char>
+readOnlySpan<char> -> ReadOnlySpan<char> // immutable
+span<char> -> Span<char>
 char -> char
-rune -> rune / char32
-u8[] -> byte[] / uint8[]
+rune -> System.Text.Rune
+u8[] -> byte[]
 
 // boolean and unit type
 bool -> bool
@@ -68,5 +68,10 @@ Result<T, E> -> struct (tagged union)
 // lists
 
 List<T> = List<T>
+
+var -> variable
+const -> constant
+
+
 
 
