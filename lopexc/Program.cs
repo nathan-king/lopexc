@@ -1,20 +1,34 @@
 ﻿using lopexc.Lexer;
+using lopexc.Parser;
+using lopexc.TypeChecker;
 
-var source = """
-             fn main() {
-                 var a: i32 = 5;
-                 var b: i32 = 4;
-                 println(`Result {x}`);
-                 if a > b
-                    => a + b
-             }
-             
-             var text: string = "Hello, world!";
-             
-             fn add(a: i32, b: i32) => a + b;
-             
-             """;
+var sourcePath = args.Length > 0 ? args[0] : Path.Combine("language", "main.lopex");
+if (!File.Exists(sourcePath))
+{
+    Console.Error.WriteLine($"Source file not found: {sourcePath}");
+    Environment.Exit(1);
+}
 
-List<Token> tokens = LexerCore.Lex(source);
-foreach (Token token in tokens)
-    Console.WriteLine(token);
+var source = File.ReadAllText(sourcePath);
+try
+{
+    List<Token> tokens = LexerCore.Lex(source);
+    var parser = new ParserCore(tokens);
+    var unit = parser.ParseCompilationUnit();
+
+    var semantics = new SemanticChecker().Check(unit);
+    if (semantics.HasErrors)
+    {
+        Console.Error.WriteLine($"Semantic check failed for {sourcePath}:");
+        foreach (var diagnostic in semantics.Diagnostics)
+            Console.Error.WriteLine($"  - {diagnostic.Message}");
+        Environment.Exit(1);
+    }
+
+    Console.WriteLine($"Parsed and type-checked {unit.Declarations.Count} top-level declarations from {sourcePath}");
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine(ex.Message);
+    Environment.Exit(1);
+}

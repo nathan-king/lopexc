@@ -1,0 +1,10 @@
+fn main() {
+    var a: i32 = 5;
+    var b: i32 = 4;
+    println(`Result {a + b}`);
+    if a > b => a + b
+}
+
+var text: string = "Hello, world!";
+
+fn add(a: i32, b: i32) => a + b;
