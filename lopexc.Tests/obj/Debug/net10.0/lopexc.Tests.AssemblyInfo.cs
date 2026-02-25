@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("lopexc.Tests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fb4527327a93cb5778cf24c85c864ffe9a497b06")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+582956eb2c0bb3fa95f2e0988cd6e1f0e224f318")]
 [assembly: System.Reflection.AssemblyProductAttribute("lopexc.Tests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("lopexc.Tests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

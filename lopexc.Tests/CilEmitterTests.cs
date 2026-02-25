@@ -39,4 +39,33 @@ public sealed class CilEmitterTests
                 File.Delete(outputPath);
         }
     }
+
+    [Fact]
+    public void Emit_MatchProgram_WritesAssemblyWithMainEntryPoint()
+    {
+        var source = """
+                     fn main() -> i32 => match 2 { 1 => 11, 2 => 22, _ => 99 };
+                     """;
+
+        var tokens = LexerCore.Lex(source);
+        var unit = new ParserCore(tokens).ParseCompilationUnit();
+        var semantics = new SemanticChecker().Check(unit);
+        Assert.False(semantics.HasErrors);
+
+        var outputPath = Path.Combine(Path.GetTempPath(), $"lopex-test-{Guid.NewGuid():N}.dll");
+        try
+        {
+            new CilEmitter().Emit(unit, semantics, outputPath);
+            Assert.True(File.Exists(outputPath));
+
+            using var assembly = AssemblyDefinition.ReadAssembly(outputPath);
+            Assert.NotNull(assembly.EntryPoint);
+            Assert.Equal("main", assembly.EntryPoint!.Name);
+        }
+        finally
+        {
+            if (File.Exists(outputPath))
+                File.Delete(outputPath);
+        }
+    }
 }

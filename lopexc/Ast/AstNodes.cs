@@ -10,6 +10,12 @@ public sealed record FunctionDecl(
     string? ReturnType,
     FunctionBody Body) : Decl;
 
+public sealed record StructDecl(
+    string Name,
+    IReadOnlyList<StructFieldDecl> Fields) : Decl;
+
+public sealed record StructFieldDecl(string Name, string TypeName);
+
 public sealed record VariableDecl(
     bool IsConst,
     bool IsMutable,
@@ -68,3 +74,17 @@ public sealed record GroupExpr(Expr Inner) : Expr;
 public sealed record BlockExpr(BlockStmt Block) : Expr;
 
 public sealed record IfExpr(Expr Condition, Expr ThenExpr, Expr? ElseExpr) : Expr;
+
+public abstract record MatchPattern;
+
+public sealed record WildcardPattern : MatchPattern;
+
+public sealed record LiteralPattern(LiteralExpr Literal) : MatchPattern;
+
+public sealed record MatchArm(MatchPattern Pattern, Expr Expr);
+
+public sealed record MatchExpr(Expr Scrutinee, IReadOnlyList<MatchArm> Arms) : Expr;
+
+public sealed record StructFieldInit(string Name, Expr Value);
+
+public sealed record StructLiteralExpr(string StructName, IReadOnlyList<StructFieldInit> Fields) : Expr;

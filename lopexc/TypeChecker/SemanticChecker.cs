@@ -9,7 +9,8 @@ public enum SemanticType
     Bool,
     I32,
     String,
-    Char
+    Char,
+    Struct
 }
 
 public sealed record Diagnostic(string Message);
@@ -31,12 +32,15 @@ public sealed class SemanticChecker
 {
     private readonly List<Diagnostic> _diagnostics = [];
     private readonly Dictionary<string, SemanticFunctionSignature> _functions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, StructInfo> _structs = new(StringComparer.Ordinal);
 
     public SemanticResult Check(CompilationUnit unit)
     {
         _diagnostics.Clear();
         _functions.Clear();
+        _structs.Clear();
         RegisterBuiltins();
+        CollectStructs(unit);
 
         CollectFunctionSignatures(unit);
 
@@ -49,6 +53,8 @@ public sealed class SemanticChecker
                     break;
                 case VariableDecl topLevelVar:
                     CheckTopLevelVariable(topLevelVar);
+                    break;
+                case StructDecl:
                     break;
             }
         }
@@ -72,6 +78,27 @@ public sealed class SemanticChecker
 
             var returnType = decl.ReturnType is null ? SemanticType.Error : ParseTypeName(decl.ReturnType);
             _functions[decl.Name] = new SemanticFunctionSignature(decl.Name, paramTypes, returnType);
+        }
+    }
+
+    private void CollectStructs(CompilationUnit unit)
+    {
+        foreach (var decl in unit.Declarations.OfType<StructDecl>())
+        {
+            if (_structs.ContainsKey(decl.Name))
+            {
+                AddError($"Duplicate struct '{decl.Name}'.");
+                continue;
+            }
+
+            var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var field in decl.Fields)
+            {
+                if (!fields.TryAdd(field.Name, field.TypeName))
+                    AddError($"Duplicate field '{field.Name}' in struct '{decl.Name}'.");
+            }
+
+            _structs[decl.Name] = new StructInfo(decl.Name, fields);
         }
     }
 
@@ -249,16 +276,119 @@ public sealed class SemanticChecker
                 return thenType;
             }
 
+            case MatchExpr matchExpr:
+                return InferMatchType(matchExpr, scope);
+
             case CallExpr call:
                 return InferCallType(call, scope);
 
+            case StructLiteralExpr structLiteral:
+                return InferStructLiteralType(structLiteral, scope);
+
             case MemberAccessExpr member:
-                AddError($"Member access '{member.Member}' is not type-checked yet.");
+                _ = InferExprType(member.Target, scope);
+                // TODO: add full member typing once typed AST carries struct identity.
                 return SemanticType.Error;
         }
 
         AddError($"Unsupported expression kind '{expr.GetType().Name}'.");
         return SemanticType.Error;
+    }
+
+    private SemanticType InferStructLiteralType(StructLiteralExpr structLiteral, Scope scope)
+    {
+        if (!_structs.TryGetValue(structLiteral.StructName, out var structInfo))
+        {
+            AddError($"Unknown struct '{structLiteral.StructName}'.");
+            return SemanticType.Error;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var fieldInit in structLiteral.Fields)
+        {
+            if (!seen.Add(fieldInit.Name))
+                AddError($"Duplicate field '{fieldInit.Name}' in struct literal '{structLiteral.StructName}'.");
+
+            if (!structInfo.Fields.TryGetValue(fieldInit.Name, out var expectedTypeName))
+            {
+                AddError($"Unknown field '{fieldInit.Name}' for struct '{structLiteral.StructName}'.");
+                continue;
+            }
+
+            var actualType = InferExprType(fieldInit.Value, scope);
+            var expectedType = ParseTypeName(expectedTypeName);
+            if (!TypesMatch(expectedType, actualType))
+            {
+                AddError(
+                    $"Field '{structLiteral.StructName}.{fieldInit.Name}' expects '{TypeName(expectedType)}' but got '{TypeName(actualType)}'.");
+            }
+        }
+
+        foreach (var expectedField in structInfo.Fields.Keys)
+        {
+            if (!seen.Contains(expectedField))
+                AddError($"Missing field '{expectedField}' in struct literal '{structLiteral.StructName}'.");
+        }
+
+        return SemanticType.Struct;
+    }
+
+    private SemanticType InferMatchType(MatchExpr matchExpr, Scope scope)
+    {
+        var scrutineeType = InferExprType(matchExpr.Scrutinee, scope);
+        if (matchExpr.Arms.Count == 0)
+        {
+            AddError("Match expression must contain at least one arm.");
+            return SemanticType.Error;
+        }
+
+        var resultType = SemanticType.Error;
+        var wildcardIndex = -1;
+
+        for (var armIndex = 0; armIndex < matchExpr.Arms.Count; armIndex++)
+        {
+            var arm = matchExpr.Arms[armIndex];
+            switch (arm.Pattern)
+            {
+                case WildcardPattern:
+                    if (wildcardIndex >= 0)
+                        AddError("Match expression can only contain one wildcard arm.");
+                    wildcardIndex = armIndex;
+                    break;
+                case LiteralPattern literalPattern:
+                {
+                    var patternType = InferExprType(literalPattern.Literal, scope);
+                    if (!TypesMatch(scrutineeType, patternType))
+                    {
+                        AddError(
+                            $"Match pattern type '{TypeName(patternType)}' does not match scrutinee type '{TypeName(scrutineeType)}'.");
+                    }
+
+                    break;
+                }
+                default:
+                    AddError($"Unsupported pattern '{arm.Pattern.GetType().Name}'.");
+                    break;
+            }
+
+            var armType = InferExprType(arm.Expr, scope);
+            if (resultType == SemanticType.Error)
+            {
+                resultType = armType;
+            }
+            else if (!TypesMatch(resultType, armType))
+            {
+                AddError($"Match arms must return the same type, got '{TypeName(resultType)}' and '{TypeName(armType)}'.");
+                resultType = SemanticType.Error;
+            }
+        }
+
+        if (wildcardIndex < 0)
+            AddError("Match expression must include a wildcard arm '_ => ...' for now.");
+        else if (wildcardIndex != matchExpr.Arms.Count - 1)
+            AddError("Wildcard match arm must be the last arm.");
+
+        return resultType;
     }
 
     private SemanticType InferBinaryType(BinaryExpr binary, Scope scope)
@@ -348,6 +478,7 @@ public sealed class SemanticChecker
             "string" => SemanticType.String,
             "char" => SemanticType.Char,
             "()" => SemanticType.Void,
+            _ when _structs.ContainsKey(name) => SemanticType.Struct,
             _ => UnknownType(name)
         };
 
@@ -372,6 +503,7 @@ public sealed class SemanticChecker
         SemanticType.I32 => "i32",
         SemanticType.String => "string",
         SemanticType.Char => "char",
+        SemanticType.Struct => "struct",
         _ => "<unknown>"
     };
 
@@ -391,6 +523,8 @@ public sealed class SemanticChecker
         if (_functions.TryGetValue(name, out var sig))
             _functions[name] = sig with { ReturnType = inferred };
     }
+
+    private sealed record StructInfo(string Name, IReadOnlyDictionary<string, string> Fields);
 
     private sealed class Scope
     {

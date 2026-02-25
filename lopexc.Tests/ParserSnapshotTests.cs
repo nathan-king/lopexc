@@ -94,6 +94,76 @@ public sealed class ParserSnapshotTests
         Assert.Equal(expected, snapshot);
     }
 
+    [Fact]
+    public void Parse_MatchExpression_InFunctionBody()
+    {
+        var source = """
+                     fn classify(x: i32) -> i32 => match x { 0 => 10, 1 => 11, _ => 99 };
+                     """;
+
+        var unit = Parse(source);
+        var snapshot = DumpCompilationUnit(unit);
+
+        const string expected = """
+            Fn(classify) -> i32
+              Params: x:i32
+              ExprBody:
+                Match
+                  Scrutinee:
+                    Identifier(x)
+                  Arm:
+                    Pattern: Literal(0)
+                    Expr:
+                      Literal(10)
+                  Arm:
+                    Pattern: Literal(1)
+                    Expr:
+                      Literal(11)
+                  Arm:
+                    Pattern: Wildcard
+                    Expr:
+                      Literal(99)
+            """;
+
+        Assert.Equal(expected, snapshot);
+    }
+
+    [Fact]
+    public void Parse_StructDeclaration_AndLiteral()
+    {
+        var source = """
+                     struct Point { x: i32, y: i32 }
+                     fn main() -> i32 {
+                         var p: Point = Point { x: 1, y: 2 };
+                         0
+                     }
+                     """;
+
+        var unit = Parse(source);
+        var snapshot = DumpCompilationUnit(unit);
+
+        const string expected = """
+            Struct(Point)
+              Field: x:i32
+              Field: y:i32
+            Fn(main) -> i32
+              Params: <none>
+              BlockBody:
+                Block:
+                  VarStmt(const=False, mut=False, name=p, type=Point)
+                    Init:
+                      StructLiteral(Point)
+                        FieldInit: x
+                          Literal(1)
+                        FieldInit: y
+                          Literal(2)
+                  ExprStmt:
+                    Literal(0)
+            """;
+
+        Assert.Equal(expected, snapshot);
+    }
+
     private static CompilationUnit Parse(string source)
     {
         var tokens = LexerCore.Lex(source);
@@ -136,6 +206,11 @@ public sealed class ParserSnapshotTests
                         DumpStmt(sb, blockBody.Block, indent + 2);
                         break;
                 }
+                break;
+            case StructDecl s:
+                AppendLine(sb, indent, $"Struct({s.Name})");
+                foreach (var field in s.Fields)
+                    AppendLine(sb, indent + 1, $"Field: {field.Name}:{field.TypeName}");
                 break;
         }
     }
@@ -223,8 +298,35 @@ public sealed class ParserSnapshotTests
                     DumpExpr(sb, ifExpr.ElseExpr, indent + 2);
                 }
                 break;
+            case MatchExpr matchExpr:
+                AppendLine(sb, indent, "Match");
+                AppendLine(sb, indent + 1, "Scrutinee:");
+                DumpExpr(sb, matchExpr.Scrutinee, indent + 2);
+                foreach (var arm in matchExpr.Arms)
+                {
+                    AppendLine(sb, indent + 1, "Arm:");
+                    AppendLine(sb, indent + 2, $"Pattern: {DumpPattern(arm.Pattern)}");
+                    AppendLine(sb, indent + 2, "Expr:");
+                    DumpExpr(sb, arm.Expr, indent + 3);
+                }
+                break;
+            case StructLiteralExpr structLiteral:
+                AppendLine(sb, indent, $"StructLiteral({structLiteral.StructName})");
+                foreach (var field in structLiteral.Fields)
+                {
+                    AppendLine(sb, indent + 1, $"FieldInit: {field.Name}");
+                    DumpExpr(sb, field.Value, indent + 2);
+                }
+                break;
         }
     }
+
+    private static string DumpPattern(MatchPattern pattern) => pattern switch
+    {
+        WildcardPattern => "Wildcard",
+        LiteralPattern lp => $"Literal({lp.Literal.Value})",
+        _ => "<unknown>"
+    };
 
     private static void AppendLine(StringBuilder sb, int indent, string line)
     {

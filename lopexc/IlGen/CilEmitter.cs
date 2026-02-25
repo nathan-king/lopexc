@@ -202,6 +202,12 @@ public sealed class CilEmitter
             case IfExpr ifExpr:
                 return EmitIf(ifExpr, context);
 
+            case MatchExpr matchExpr:
+                return EmitMatch(matchExpr, context);
+
+            case StructLiteralExpr:
+                throw new InvalidOperationException("Struct runtime emission is not implemented yet.");
+
             case BlockExpr blockExpr:
                 return EmitBlockExpr(blockExpr, context);
         }
@@ -399,6 +405,93 @@ public sealed class CilEmitter
         return thenType;
     }
 
+    private SemanticType EmitMatch(MatchExpr matchExpr, EmitContext context)
+    {
+        if (matchExpr.Arms.Count == 0)
+            throw new InvalidOperationException("Match expression must contain at least one arm.");
+
+        var scrutineeType = EmitExpression(matchExpr.Scrutinee, context);
+        if (scrutineeType != SemanticType.I32 && scrutineeType != SemanticType.Bool && scrutineeType != SemanticType.Char)
+        {
+            throw new InvalidOperationException(
+                $"Match scrutinee type '{TypeName(scrutineeType)}' is not supported by IL emission yet.");
+        }
+
+        var scrutineeLocal = new VariableDefinition(ToTypeReference(scrutineeType, context.Method.Module));
+        context.Method.Body.Variables.Add(scrutineeLocal);
+        context.IL.Emit(OpCodes.Stloc, scrutineeLocal);
+
+        var endLabel = Instruction.Create(OpCodes.Nop);
+        SemanticType? resultType = null;
+        var nextArmLabels = new Queue<Instruction>();
+        for (var i = 0; i < matchExpr.Arms.Count; i++)
+            nextArmLabels.Enqueue(Instruction.Create(OpCodes.Nop));
+
+        for (var i = 0; i < matchExpr.Arms.Count; i++)
+        {
+            var arm = matchExpr.Arms[i];
+            var nextLabel = nextArmLabels.Dequeue();
+            if (i > 0)
+                context.IL.Append(nextLabel);
+
+            switch (arm.Pattern)
+            {
+                case WildcardPattern:
+                    break;
+                case LiteralPattern literalPattern:
+                    EmitPatternCompare(scrutineeLocal, scrutineeType, literalPattern, nextArmLabels.TryPeek(out var fallback) ? fallback : null, context);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unsupported match pattern '{arm.Pattern.GetType().Name}'.");
+            }
+
+            var armType = EmitExpression(arm.Expr, context);
+            resultType ??= armType;
+            if (resultType != armType)
+                throw new InvalidOperationException("Match arms must return the same type for IL emission.");
+
+            context.IL.Emit(OpCodes.Br, endLabel);
+        }
+
+        if (nextArmLabels.Count > 0)
+            context.IL.Append(nextArmLabels.Dequeue());
+
+        if (resultType is null)
+            throw new InvalidOperationException("Match expression produced no result.");
+
+        context.IL.Append(endLabel);
+        return resultType.Value;
+    }
+
+    private void EmitPatternCompare(
+        VariableDefinition scrutineeLocal,
+        SemanticType scrutineeType,
+        LiteralPattern literalPattern,
+        Instruction? onMismatch,
+        EmitContext context)
+    {
+        var literalType = literalPattern.Literal.Kind switch
+        {
+            LiteralKind.Integer => SemanticType.I32,
+            LiteralKind.True or LiteralKind.False => SemanticType.Bool,
+            LiteralKind.Char => SemanticType.Char,
+            _ => SemanticType.Error
+        };
+
+        if (literalType == SemanticType.Error || literalType != scrutineeType)
+        {
+            throw new InvalidOperationException(
+                $"Match pattern type '{TypeName(literalType)}' does not match scrutinee '{TypeName(scrutineeType)}'.");
+        }
+
+        context.IL.Emit(OpCodes.Ldloc, scrutineeLocal);
+        EmitLiteral(literalPattern.Literal, context);
+        context.IL.Emit(OpCodes.Ceq);
+
+        onMismatch ??= Instruction.Create(OpCodes.Nop);
+        context.IL.Emit(OpCodes.Brfalse, onMismatch);
+    }
+
     private SemanticType EmitBlockExpr(BlockExpr blockExpr, EmitContext context)
     {
         _ = blockExpr;
@@ -524,6 +617,8 @@ public sealed class CilEmitter
             ParseTypeFromReference(method.ReturnType),
         IfExpr ifExpr when ifExpr.ElseExpr is not null => InferExprType(ifExpr.ThenExpr, context),
         IfExpr => SemanticType.Void,
+        MatchExpr matchExpr when matchExpr.Arms.Count > 0 => InferExprType(matchExpr.Arms[0].Expr, context),
+        MatchExpr => SemanticType.Error,
         BlockExpr => context.ExpectedReturn,
         _ => SemanticType.Error
     };

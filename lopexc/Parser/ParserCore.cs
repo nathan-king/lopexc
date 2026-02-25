@@ -25,6 +25,12 @@ public sealed class ParserCore
                 continue;
             }
 
+            if (Match(TokenKind.Struct))
+            {
+                declarations.Add(ParseStructDecl());
+                continue;
+            }
+
             if (Check(TokenKind.Const) || Check(TokenKind.Var) || Check(TokenKind.Mut))
             {
                 declarations.Add(ParseVariableDeclTopLevel());
@@ -35,6 +41,26 @@ public sealed class ParserCore
         }
 
         return new CompilationUnit(declarations);
+    }
+
+    private StructDecl ParseStructDecl()
+    {
+        var name = Consume(TokenKind.Identifier, "Expected struct name.");
+        Consume(TokenKind.LBrace, "Expected '{' after struct name.");
+
+        var fields = new List<StructFieldDecl>();
+        while (!Check(TokenKind.RBrace) && !IsAtEnd())
+        {
+            var fieldName = Consume(TokenKind.Identifier, "Expected field name.");
+            Consume(TokenKind.Colon, "Expected ':' after field name.");
+            var typeName = ParseTypeNameUntil(TokenKind.Comma, TokenKind.RBrace);
+            fields.Add(new StructFieldDecl(fieldName.text, typeName));
+
+            Match(TokenKind.Comma);
+        }
+
+        Consume(TokenKind.RBrace, "Expected '}' after struct fields.");
+        return new StructDecl(name.text, fields);
     }
 
     private FunctionDecl ParseFunctionDecl()
@@ -166,6 +192,12 @@ public sealed class ParserCore
 
     private Expr ParsePrefix()
     {
+        if (Check(TokenKind.Identifier) && PeekKind() == TokenKind.LBrace && LooksLikeTypeName(Current().text))
+            return ParseStructLiteral();
+
+        if (Match(TokenKind.Match))
+            return ParseMatchExpr();
+
         if (Match(TokenKind.If))
             return ParseIfExpr();
 
@@ -208,6 +240,75 @@ public sealed class ParserCore
         }
 
         throw Error($"Expected expression but found: {Current().kind}");
+    }
+
+    private StructLiteralExpr ParseStructLiteral()
+    {
+        var structName = Consume(TokenKind.Identifier, "Expected struct name in literal.");
+        Consume(TokenKind.LBrace, "Expected '{' in struct literal.");
+
+        var fields = new List<StructFieldInit>();
+        while (!Check(TokenKind.RBrace) && !IsAtEnd())
+        {
+            var fieldName = Consume(TokenKind.Identifier, "Expected field name in struct literal.");
+            Consume(TokenKind.Colon, "Expected ':' in struct literal field.");
+            var expr = ParseExpression();
+            fields.Add(new StructFieldInit(fieldName.text, expr));
+
+            Match(TokenKind.Comma);
+        }
+
+        Consume(TokenKind.RBrace, "Expected '}' after struct literal.");
+        return new StructLiteralExpr(structName.text, fields);
+    }
+
+    private MatchExpr ParseMatchExpr()
+    {
+        var scrutinee = ParseExpression();
+        Consume(TokenKind.LBrace, "Expected '{' after match scrutinee.");
+
+        var arms = new List<MatchArm>();
+        while (!Check(TokenKind.RBrace) && !IsAtEnd())
+        {
+            var pattern = ParseMatchPattern();
+            Consume(TokenKind.Arrow, "Expected '=>' in match arm.");
+            var expr = ParseExpression();
+            arms.Add(new MatchArm(pattern, expr));
+
+            Match(TokenKind.Comma);
+            Match(TokenKind.Semicolon);
+        }
+
+        Consume(TokenKind.RBrace, "Expected '}' after match arms.");
+        return new MatchExpr(scrutinee, arms);
+    }
+
+    private MatchPattern ParseMatchPattern()
+    {
+        if (Match(TokenKind.Underscore))
+            return new WildcardPattern();
+
+        if (Match(TokenKind.Integer) || Match(TokenKind.Float) || Match(TokenKind.String) ||
+            Match(TokenKind.Char) || Match(TokenKind.BacktickString) ||
+            Match(TokenKind.True) || Match(TokenKind.False))
+        {
+            var token = Previous();
+            var kind = token.kind switch
+            {
+                TokenKind.Integer => LiteralKind.Integer,
+                TokenKind.Float => LiteralKind.Float,
+                TokenKind.String => LiteralKind.String,
+                TokenKind.Char => LiteralKind.Char,
+                TokenKind.BacktickString => LiteralKind.BacktickString,
+                TokenKind.True => LiteralKind.True,
+                TokenKind.False => LiteralKind.False,
+                _ => throw Error($"Unexpected literal token in pattern: {token.kind}")
+            };
+
+            return new LiteralPattern(new LiteralExpr(kind, token.text));
+        }
+
+        throw Error($"Unsupported match pattern token: {Current().kind}");
     }
 
     private IfExpr ParseIfExpr()
@@ -285,6 +386,17 @@ public sealed class ParserCore
     private Token Current() => _tokens[_position];
 
     private Token Previous() => _tokens[_position - 1];
+
+    private TokenKind PeekKind(int offset = 1)
+    {
+        var index = _position + offset;
+        if (index >= _tokens.Count)
+            return TokenKind.EOF;
+        return _tokens[index].kind;
+    }
+
+    private static bool LooksLikeTypeName(string text) =>
+        !string.IsNullOrEmpty(text) && char.IsUpper(text[0]);
 
     private Token Advance()
     {

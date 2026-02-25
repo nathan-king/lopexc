@@ -1,139 +1,73 @@
-# Lopex 🦊
+# Lopex
 
-**Lopex** is a statically typed programming language targeting **.NET (CIL)**, designed to combine:
+Lopex is a statically typed language that targets .NET CIL.  
+The goal is to be expression-oriented like Rust, while staying obviously .NET-native in its type model and interop.
 
-* the ergonomics, tooling, and ecosystem of C# and .NET
-* safety and correctness principles popularised by Rust, including:
-  * explicit handling of absence with Option<T> instead of implicit nulls 
-  * Result<T, E> for structured, predictable error handling 
-  * expression-oriented control flow (match, if as expressions)
-* a concise, expression-first syntax that reduces boilerplate without sacrificing clarity
+## Current State
 
-Lopex compiles directly to **Common Intermediate Language (CIL)**, enabling seamless interoperability with the full .NET ecosystem.
+Lopex currently has a working end-to-end compiler slice:
 
-## Goals
+1. Read `.lopex` source file
+2. Lex to tokens
+3. Parse to AST
+4. Run semantic/type checks
+5. Emit CIL `.dll` (MVP subset)
+6. Run emitted assembly
 
-Lopex is designed with the following principles:
+### Implemented Today
 
-- **First-class .NET interop**  
-  Full access to the .NET standard library and existing C# libraries.
+- CLI commands: `check`, `build`, `run`
+- Lexer with source position tracking and modern operator coverage
+- Parser for:
+  - function declarations
+  - variable declarations
+  - `if` expressions
+  - `match` expressions (literal + `_` arms)
+  - struct declarations
+  - struct literals
+- Semantic/type checker for:
+  - primitive types (`i32`, `bool`, `string`, `char`, `()`)
+  - function signatures and call checking
+  - arithmetic/logical/comparison rules
+  - `if` and `match` typing rules
+  - struct literal field validation
+- CIL emitter (Mono.Cecil) for MVP runtime subset
+- Automated test suite for lexer, parser, semantics, and emitter
 
-- **Expression-oriented syntax**  
-  Control flow constructs return values (`if`, `match`, etc.).
+### Current Runtime Emission Limits
 
-- **Minimal ceremony**  
-  Fewer keywords, less boilerplate, readable defaults.
+- Struct runtime emission is not implemented yet (frontend support exists)
+- No loops, generics, modules, interfaces, enums, or advanced patterns in emitted code yet
+- No full runtime library/stdlib yet
 
-- **Predictable semantics**  
-  No magic. Clear evaluation rules and explicit types where it matters.
+## Quick Start
 
-- **Modern language features**  
-  Pattern matching, strong typing, value semantics, and safe defaults.
+From repo root:
 
----
-
-## Example
-
-```lopex
-fn main() {
-    var a: i32 = 5;
-    var b: i32 = 4;
-
-    if a > b =>
-        println(`Result {a + b}`);
-}
+```bash
+./lopex check language/main.lopex
+./lopex build language/mvp.lopex -o out/mvp.dll
+./lopex run language/mvp.lopex
 ```
 
----
+Examples live under `language/`.
 
-## Language Features
+## What We Need Next
 
-### Core
-- Static typing
-- Type inference (where unambiguous)
-- Functions as first-class values
-- Expression-based `if` and `match`
-- Immutable-by-default values (configurable)
+1. Complete struct runtime support in IL emission
+2. Add enums and richer pattern matching
+3. Implement loops and more statement forms
+4. Introduce typed IR and lowering layer (currently direct AST->IL for subset)
+5. Expand type system (user-defined types, better inference, diagnostics with spans/codes)
+6. Improve tooling (formatting, richer CLI ergonomics, docs, eventually LSP)
 
-### Control Flow
-- `if` expressions
-- `match` expressions with value and condition matching
-- Block expressions
+## Repository Guide
 
-```lopex
-match x {
-    0 => 0,
-    x < 0 => -1,
-    _ => 1
-}
-```
+Detailed README files exist in each major folder:
 
-### Data Types
-- Primitive numeric types (`i32`, etc.)
-- Strings
-- Structs
-- Interfaces + implementations
+- [`language/`](language/README.md)
+- [`lopexc/`](lopexc/README.md)
+- [`lopexc.Tests/`](lopexc.Tests/README.md)
+- [`out/`](out/README.md)
 
-### Interop
-- Calls into .NET APIs
-- Uses CIL as the compilation target
-- Compatible with async/await via .NET tasks
-
-## Compiler Architecture
-
-The Lopex compiler is written in **C#** and follows a traditional pipeline:
-
-```
-Source
-  ↓
-Lexer
-  ↓
-Parser
-  ↓
-AST
-  ↓
-Type Checker
-  ↓
-IR
-  ↓
-CIL Emission
-```
-
-## Current Status
-
-**Early-stage, actively developed**
-
-### Implemented
-- Lexer
-- Token definitions
-- Source position tracking
-
-### In Progress
-- Parser (AST generation)
-- Expression parsing
-- IR design
-
-### Planned
-- Type checking
-- IL emission
-- Minimal standard library
-- CLI tooling
-
-## Why Lopex?
-
-Lopex explores a space not fully covered by C#:
-
-- More **expression-oriented**
-- Less ceremony
-- Stronger pattern matching
-- Designed for clarity first
-
-It is not intended to replace C#, but to complement it.
-
-## Name
-
-**Lopex** is inspired by the fox, a symbol of adaptability and intelligence, and references multi-tailed fox legends from Japanese folklore.
-
-## License
-
-MIT
+Inside `lopexc/`, each compiler stage folder also has its own README.
