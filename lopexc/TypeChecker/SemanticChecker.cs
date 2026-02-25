@@ -14,7 +14,15 @@ public enum SemanticType
 
 public sealed record Diagnostic(string Message);
 
-public sealed record SemanticResult(IReadOnlyList<Diagnostic> Diagnostics)
+public sealed record SemanticFunctionSignature(
+    string Name,
+    IReadOnlyList<SemanticType> ParameterTypes,
+    SemanticType ReturnType,
+    bool IsVariadic = false);
+
+public sealed record SemanticResult(
+    IReadOnlyList<Diagnostic> Diagnostics,
+    IReadOnlyDictionary<string, SemanticFunctionSignature> Functions)
 {
     public bool HasErrors => Diagnostics.Count > 0;
 }
@@ -22,7 +30,7 @@ public sealed record SemanticResult(IReadOnlyList<Diagnostic> Diagnostics)
 public sealed class SemanticChecker
 {
     private readonly List<Diagnostic> _diagnostics = [];
-    private readonly Dictionary<string, FunctionSignature> _functions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SemanticFunctionSignature> _functions = new(StringComparer.Ordinal);
 
     public SemanticResult Check(CompilationUnit unit)
     {
@@ -45,7 +53,7 @@ public sealed class SemanticChecker
             }
         }
 
-        return new SemanticResult(_diagnostics.ToArray());
+        return new SemanticResult(_diagnostics.ToArray(), new Dictionary<string, SemanticFunctionSignature>(_functions));
     }
 
     private void CollectFunctionSignatures(CompilationUnit unit)
@@ -63,7 +71,7 @@ public sealed class SemanticChecker
                 paramTypes.Add(ParseTypeName(param.TypeName));
 
             var returnType = decl.ReturnType is null ? SemanticType.Error : ParseTypeName(decl.ReturnType);
-            _functions[decl.Name] = new FunctionSignature(decl.Name, paramTypes, returnType);
+            _functions[decl.Name] = new SemanticFunctionSignature(decl.Name, paramTypes, returnType);
         }
     }
 
@@ -371,7 +379,7 @@ public sealed class SemanticChecker
 
     private void RegisterBuiltins()
     {
-        _functions["println"] = new FunctionSignature(
+        _functions["println"] = new SemanticFunctionSignature(
             "println",
             [SemanticType.String],
             SemanticType.Void,
@@ -383,12 +391,6 @@ public sealed class SemanticChecker
         if (_functions.TryGetValue(name, out var sig))
             _functions[name] = sig with { ReturnType = inferred };
     }
-
-    private sealed record FunctionSignature(
-        string Name,
-        IReadOnlyList<SemanticType> ParameterTypes,
-        SemanticType ReturnType,
-        bool IsVariadic = false);
 
     private sealed class Scope
     {
